@@ -2,6 +2,7 @@
 
 from torch.utils.data import DataLoader
 from .shha import SHHA
+from .ricew3999 import RiceW3999
 
 def build_loader(config, mode):
     data_path = config.DATA_PATH
@@ -10,7 +11,8 @@ def build_loader(config, mode):
     batch_size = config.BATCH_SIZE
     num_workers = config.NUM_WORKERS
     Dataset = {
-        'shha': SHHA
+        'shha': SHHA,
+        'ricew3999': RiceW3999
     }[config.DATASET.lower()]
 
     data_set = Dataset(data_path, mode, label_prob, protc_path)
@@ -35,7 +37,8 @@ def build_normal_loader(config, mode):
     batch_size = config.BATCH_SIZE
     
     Dataset = {
-        'shha': SHHA
+        'shha': SHHA,
+        'ricew3999': RiceW3999
     }[config.DATASET.lower()]
     
     data_set = Dataset(data_path, mode)
