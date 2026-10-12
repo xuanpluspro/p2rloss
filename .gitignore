@@ -1,0 +1,31 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# experiments
+exp/
+# Local datasets
+/data/
+/SHTech_PartA/
+/sudanPart/
+
+# Training and inference outputs
+/exp/
+/outputs/
+/checkpoints/
+/inference_results/
+/train_top10_infer*/
+/testresult*/
+*.pth
+*.pt
+*.ckpt
+
+# Cache and local secrets
+__pycache__/
+*.pyc
+.env
+.env.*
+
+.ipynb_checkpoints/
+/inference_result.jpg
