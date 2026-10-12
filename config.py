@@ -24,6 +24,8 @@ _C.DATA.BATCH_SIZE = 1
 _C.DATA.DATA_PATH = ''
 # Dataset name
 _C.DATA.DATASET = 'shha'
+_C.DATA.LABEL_PERCENT = 1.0
+_C.DATA.LABEL_PROTOCOL = ''
 # Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.
 _C.DATA.PIN_MEMORY = False
 # Number of data loading threads
