@@ -96,8 +96,8 @@ class NormalSample(object):
         # print("img:", image.shape, crop_h, crop_w, imh, imw, scale)
 
         if crop_h > imh or crop_w > imw:
-            padw = crop_w - imw
-            padh = crop_h - imh
+            padw = max(0, crop_w - imw)
+            padh = max(0, crop_h - imh)
             image = F.pad(image, (0, padw, 0, padh), mode='constant', value=0)
             # dotseq[:, 0] += padw
             # dotseq[:, 1] += padh
@@ -115,7 +115,7 @@ class NormalSample(object):
             crop_imgs.append(crop_img)
 
             if dotseq is not None:
-                idx = (dotseq[:, 0] >= start_w) & (dotseq[:, 0] <= end_w) & (dotseq[:, 1] >= start_h) & (dotseq[:, 1] <= end_h)
+                idx = (dotseq[:, 0] >= start_w) & (dotseq[:, 0] < end_w) & (dotseq[:, 1] >= start_h) & (dotseq[:, 1] < end_h)
                 selected_dot = dotseq[idx]
                 selected_dot[:, 0] = (selected_dot[:, 0] - start_w) * rw
                 selected_dot[:, 1] = (selected_dot[:, 1] - start_h) * rh
