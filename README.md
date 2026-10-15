@@ -57,6 +57,39 @@ You also need to prepare a protocol file that specifies which images are labeled
 
 ## Training
 
+### RiceW3999 fully supervised training on AutoDL
+
+The RiceW3999 adapter uses **all train annotations** with `--label 100` and validates on `val.txt`; no `test.txt` or unlabeled protocol is required. Expected layout:
+
+```text
+/root/autodl-tmp/p2rloss/data/RiceW3999/
+  ImageSets/train.txt
+  ImageSets/val.txt
+  JPEGImages/<image_id>.png   # also supports jpg/jpeg/bmp/tif/tiff
+  PointAnnotations/<image_id>.txt
+```
+
+Split files contain image IDs without extensions, one per line. Point TXT files contain pixel coordinates `x y`, one point per line (not YOLO-normalized coordinates). An empty TXT represents an image without points.
+
+Place the ImageNet VGG16-BN checkpoint `vgg16_bn-6c64b313.pth` in the repository root, then run:
+
+```bash
+cd /root/autodl-tmp/p2rloss
+bash train_ricew3999.sh ricew3999_ep50_bs8
+```
+
+To reuse weights stored elsewhere:
+
+```bash
+WEIGHTS_PATH=/absolute/path/vgg16_bn-6c64b313.pth bash train_ricew3999.sh ricew3999_ep50_bs8
+```
+
+The script trains for 50 epochs, batch size 8, using the P2R supervised loss. Training uses **one online random 512×512 output patch per source image per visit**, with scale augmentation (0.7–1.3) and random horizontal flip; points are cropped/scaled/flipped together. This is not exhaustive non-overlapping tiling. Validation uses full images, batch size 1. Wheat 1024×1024 and rice 512×512 images can share a training batch because every training output is 512×512. The teacher/pseudo-label branch is skipped at 100% labels, although the current trainer still creates and EMA-updates a teacher model.
+
+Logs: `exp/<tag>/train.log/running.log`; best checkpoint: `exp/<tag>/output/ckpt_epoch_best.pth`. Validation runs every 5 epoch indices after index 0 and at the last epoch. Use a new tag for a fresh run: the existing automatic checkpoint reload restores model weights, not full optimizer/epoch state.
+
+GPU peak memory depends on batch size, precision, image size and point count. The trainer currently uses FP32. It logs PyTorch peak allocated memory as `mem ... MB`; no measured GPU-memory comparison with PET is provided here.
+
 ### Basic Usage
 
 ```bash

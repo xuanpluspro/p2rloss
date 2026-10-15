@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import torch
+from pathlib import Path
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
@@ -15,8 +16,10 @@ class VGG16_BN(nn.Module):
     def __init__(self, config):
         super().__init__()
         vgg = models.vgg16_bn(pretrained=False)
-        weight_path = "/root/autodl-tmp/P2RLoss-main/vgg16_bn-6c64b313.pth"
-        state_dict = torch.load(weight_path)
+        weight_path = Path(config.PRETRAINED) if config is not None else Path(__file__).resolve().parents[1] / 'vgg16_bn-6c64b313.pth'
+        if not weight_path.is_file():
+            raise FileNotFoundError(f"VGG16-BN weights not found: {weight_path}. Set --opts MODEL.PRETRAINED /path/to/weights.pth")
+        state_dict = torch.load(weight_path, map_location='cpu', weights_only=True)
         vgg.load_state_dict(state_dict)
         print(f"✅ 成功加载本地 VGG16-BN 预训练权重: {weight_path}")
         
