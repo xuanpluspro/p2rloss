@@ -22,6 +22,7 @@ from models import build_model
 from datasets import build_loader
 from losses import build_loss
 from logger import create_logger
+from progress import progress_bar
 from utils import load_checkpoint, save_checkpoint, get_grad_norm, auto_resume_helper, reduce_tensor, plot_curve, set_seed
 STAGE_1, STAGE_2 = 0, 1
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -169,72 +170,81 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch):
 
     start = time.time()
     end = time.time()
-    for idx, (limg, lseq, lid, uimg, umasks, uid) in enumerate(data_loader):
-        limg = limg.cuda(non_blocking=True)
-        lseq = [d.cuda(non_blocking=True) for d in lseq]
+    with progress_bar(data_loader, desc=f'Train {epoch + 1}/{config.TRAIN.EPOCHS}', unit='batch') as bar:
+        for idx, (limg, lseq, lid, uimg, umasks, uid) in enumerate(bar):
+            limg = limg.cuda(non_blocking=True)
+            lseq = [d.cuda(non_blocking=True) for d in lseq]
 
-        lden = student(limg)
-        down_rate = limg.size(-1) // lden.size(-1)
-        loss = criterion(lden, lseq, down_rate)
+            lden = student(limg)
+            down_rate = limg.size(-1) // lden.size(-1)
+            loss = criterion(lden, lseq, down_rate)
 
-        if epoch >= STAGE_2 and config.DATA.LABEL_PERCENT < 1.0:
-            wa_img = uimg[:, :3].cuda(non_blocking=True)
-            sa_img = uimg[:, 3:].cuda(non_blocking=True)
-            cut_img_mask = umasks.cuda(non_blocking=True)
-            cut_den_mask = tF.avg_pool2d(cut_img_mask, kernel_size=down_rate, stride=down_rate) >= 0.5
+            if epoch >= STAGE_2 and config.DATA.LABEL_PERCENT < 1.0:
+                wa_img = uimg[:, :3].cuda(non_blocking=True)
+                sa_img = uimg[:, 3:].cuda(non_blocking=True)
+                cut_img_mask = umasks.cuda(non_blocking=True)
+                cut_den_mask = tF.avg_pool2d(cut_img_mask, kernel_size=down_rate, stride=down_rate) >= 0.5
 
-            sa_img_mask = sa_img * cut_img_mask
+                sa_img_mask = sa_img * cut_img_mask
 
-            with torch.inference_mode():
-                tu_den = teacher(wa_img)
+                with torch.inference_mode():
+                    tu_den = teacher(wa_img)
 
-                tu_mask, tu_seq2, = [], []
-                for tden in tu_den:
-                    tseq = torch.nonzero((tden >= 0).squeeze())
+                    tu_mask, tu_seq2, = [], []
+                    for tden in tu_den:
+                        tseq = torch.nonzero((tden >= 0).squeeze())
 
-                    peaks = tden.squeeze()[tseq[:, 0], tseq[:, 1]]
-                    threshold = 0.8472978603872036 # sigmoid(0.8472978603872036) = 0.7
-                    tu_mask.append(peaks > threshold)
+                        peaks = tden.squeeze()[tseq[:, 0], tseq[:, 1]]
+                        threshold = 0.8472978603872036 # sigmoid(0.8472978603872036) = 0.7
+                        tu_mask.append(peaks > threshold)
 
-                    tseq2 = tseq * down_rate + (down_rate - 1) / 2
-                    tu_seq2.append(tseq2)
+                        tseq2 = tseq * down_rate + (down_rate - 1) / 2
+                        tu_seq2.append(tseq2)
 
-            weight = min(max((epoch - STAGE_2) * 0.01, 0), 2)
-            su_den = student(sa_img_mask)    
-            semi_loss = criterion(su_den, tu_seq2, down_rate, tu_mask, crop_den_masks=cut_den_mask)
-            loss = (loss + weight * semi_loss) / (1 + weight)
+                weight = min(max((epoch - STAGE_2) * 0.01, 0), 2)
+                su_den = student(sa_img_mask)    
+                semi_loss = criterion(su_den, tu_seq2, down_rate, tu_mask, crop_den_masks=cut_den_mask)
+                loss = (loss + weight * semi_loss) / (1 + weight)
 
-        optimizer.zero_grad()
-        loss.backward()
+            optimizer.zero_grad()
+            loss.backward()
 
-        grad_norm = get_grad_norm(student.parameters())
-        optimizer.step()
+            grad_norm = get_grad_norm(student.parameters())
+            optimizer.step()
 
-        # # momentum update
-        momentum = 0.998
-        for para_t, para_s in zip(teacher.parameters(), student.parameters()):
-            para_t.data.copy_(para_t.data * momentum + para_s.data * (1.0 - momentum))
+            # # momentum update
+            momentum = 0.998
+            for para_t, para_s in zip(teacher.parameters(), student.parameters()):
+                para_t.data.copy_(para_t.data * momentum + para_s.data * (1.0 - momentum))
 
-        torch.cuda.synchronize()
+            torch.cuda.synchronize()
 
-        loss_meter.update(loss.item(), limg.size(0))
-        norm_meter.update(grad_norm)
-        batch_time.update(time.time() - end)
-        end = time.time()
+            loss_meter.update(loss.item(), limg.size(0))
+            norm_meter.update(grad_norm)
+            batch_time.update(time.time() - end)
+            end = time.time()
 
-        if idx % config.PRINT_FREQ == 0:
-            lr = optimizer.param_groups[0]['lr']
-            memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
-            etas = batch_time.avg * (num_steps - idx)
-            logger.info(
-                f'Train: [{epoch}/{config.TRAIN.EPOCHS}][{idx}/{num_steps}]\t'
-                f'eta {datetime.timedelta(seconds=int(etas))} lr {lr*1e5:.3f}\t'
-                f'time {batch_time.val:.4f} ({batch_time.avg:.4f})\t'
-                f'loss {loss_meter.val :.3f} ({loss_meter.avg :.3f})\t'
-                f'grad_norm {norm_meter.val  :.3f} ({norm_meter.avg :.3f})\t'
-                f'mem {memory_used:.0f}MB')
+            bar.set_postfix(
+                loss=f'{loss_meter.val:.4f}', avg=f'{loss_meter.avg:.4f}',
+                lr=f'{optimizer.param_groups[0]["lr"]:.1e}',
+                GPU=f'{torch.cuda.max_memory_allocated() / 1024**3:.1f}GiB', refresh=False)
+
+            if idx % config.PRINT_FREQ == 0:
+                lr = optimizer.param_groups[0]['lr']
+                memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
+                etas = batch_time.avg * (num_steps - idx)
+                logger.info(
+                    f'Train: [{epoch}/{config.TRAIN.EPOCHS}][{idx}/{num_steps}]\t'
+                    f'eta {datetime.timedelta(seconds=int(etas))} lr {lr*1e5:.3f}\t'
+                    f'time {batch_time.val:.4f} ({batch_time.avg:.4f})\t'
+                    f'loss {loss_meter.val :.3f} ({loss_meter.avg :.3f})\t'
+                    f'grad_norm {norm_meter.val  :.3f} ({norm_meter.avg :.3f})\t'
+                    f'mem {memory_used:.0f}MB', extra={'file_only': True})
     epoch_time = time.time() - start
-    logger.info(f"EPOCH {epoch} training takes {datetime.timedelta(seconds=int(epoch_time))}")
+    logger.info(
+        f'Epoch {epoch + 1}/{config.TRAIN.EPOCHS} | train loss {loss_meter.avg:.4f} | '
+        f'time {epoch_time:.1f}s | lr {optimizer.param_groups[0]["lr"]:.1e} | '
+        f'GPU peak {torch.cuda.max_memory_allocated() / 1024**3:.2f}GiB')
 
 
 @torch.no_grad()
@@ -251,23 +261,31 @@ def validate(config, data_loader, model, criterion, epoch=None):
         for image_id, image_path, _ in data_loader.dataset.samples:
             with Image.open(image_path) as image:
                 original_sizes[str(image_id)] = (image.height, image.width)
-    for idx, (images, dotseq, imgid) in enumerate(data_loader):
-        images = images.cuda(non_blocking=True)
-        dotseq = [d.cuda(non_blocking=True) for d in dotseq]
-        output = model(images)
-        down_h, down_w = images.size(-2) / output.size(-2), images.size(-1) / output.size(-1)
-        loss = criterion(output, dotseq, images.size(-1) // output.size(-1)).item()
-        loss_meter.update(loss, images.size(0))
-        for b, seq in enumerate(dotseq):
-            positions = torch.nonzero(output[b, 0] > 0).float()
-            positions[:, 0] = positions[:, 0] * down_h + (down_h - 1) / 2
-            positions[:, 1] = positions[:, 1] * down_w + (down_w - 1) / 2
-            h, w = original_sizes.get(str(imgid[b]), images.shape[-2:])
-            keep = ((positions[:, 0] >= 0) & (positions[:, 0] < h) &
-                    (positions[:, 1] >= 0) & (positions[:, 1] < w))
-            meter.update(imgid[b], positions[keep].cpu().numpy(), seq[:, :2].cpu().numpy())
-        if idx % config.PRINT_FREQ == 0:
-            logger.info(f'Validation [{idx}/{len(data_loader)}] loss={loss_meter.avg:.6f}')
+    absolute_error, evaluated_images = 0, 0
+    title = 'Validation' if epoch is None else f'Val {epoch + 1}/{config.TRAIN.EPOCHS}'
+    with progress_bar(data_loader, desc=title, unit='image') as bar:
+        for idx, (images, dotseq, imgid) in enumerate(bar):
+            images = images.cuda(non_blocking=True)
+            dotseq = [d.cuda(non_blocking=True) for d in dotseq]
+            output = model(images)
+            down_h, down_w = images.size(-2) / output.size(-2), images.size(-1) / output.size(-1)
+            loss = criterion(output, dotseq, images.size(-1) // output.size(-1)).item()
+            loss_meter.update(loss, images.size(0))
+            for b, seq in enumerate(dotseq):
+                positions = torch.nonzero(output[b, 0] > 0).float()
+                positions[:, 0] = positions[:, 0] * down_h + (down_h - 1) / 2
+                positions[:, 1] = positions[:, 1] * down_w + (down_w - 1) / 2
+                h, w = original_sizes.get(str(imgid[b]), images.shape[-2:])
+                keep = ((positions[:, 0] >= 0) & (positions[:, 0] < h) &
+                        (positions[:, 1] >= 0) & (positions[:, 1] < w))
+                meter.update(imgid[b], positions[keep].cpu().numpy(), seq[:, :2].cpu().numpy())
+                absolute_error += abs(int(keep.sum().item()) - seq.size(0))
+                evaluated_images += 1
+            bar.set_postfix(loss=f'{loss_meter.avg:.4f}',
+                            MAE=f'{absolute_error / max(1, evaluated_images):.3f}', refresh=False)
+            if idx % config.PRINT_FREQ == 0:
+                logger.info(f'Validation [{idx}/{len(data_loader)}] loss={loss_meter.avg:.6f}',
+                            extra={'file_only': True})
     report = meter.summary()
     report['loss'] = float(loss_meter.avg)
     report['params'] = sum(p.numel() for p in model.parameters())

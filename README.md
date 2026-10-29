@@ -242,3 +242,15 @@ python main.py --eval --label 100 --data-path /path/to/RiceW3999 --resume /path/
 默认使用 `pretrained/vgg16_bn-6c64b313.pth`，与 PET 的 ImageNet VGG16-BN 骨干权重相同。
 若文件原先放在仓库根目录，更新代码后手动移入 pretrained；程序不会移动或删除已有文件。
 原来的 WEIGHTS_PATH 和 --opts MODEL.PRETRAINED 显式路径仍有效。
+
+## 训练与验证进度条
+
+训练和验证默认显示 tqdm 单行进度条。训练显示当前/平均 loss、实际学习率（科学计数法）、
+峰值显存、批次数和 ETA；每轮结束保留一行汇总，验证结束输出 MAE、RMSE 和定位指标。
+启动脚本使用 tee 时，临时进度条直接写入控制终端，不污染 running.log。
+非交互后台任务无终端时自动关闭进度条，仍保留日志。
+PRINT_FREQ 控制详细文件日志频率，不再控制终端进度条刷新；详细批次记录见 output/log_rank0.txt。
+可设置 P2R_PROGRESS=0 禁用进度条。缺少依赖时安装 tqdm（不会安装 torch）。
+VGG16-BN 初始化改用 weights=None，再加载指定的本地预训练权重；
+meshgrid 显式指定 indexing='ij'，保留原有(y,x)坐标顺序。
+此次修改不改变网络、损失、学习率或数据增强。现有训练进程需重启后才使用新版界面。

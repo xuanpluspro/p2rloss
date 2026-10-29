@@ -44,7 +44,7 @@ class P2RLoss(nn.modules.loss._Loss):
                cnt_loss = cnt_loss + tF.binary_cross_entropy_with_logits(den, torch.zeros_like(den), weight=torch.ones_like(den) * 0.5)
             else:
                 A_coord = torch.stack(torch.meshgrid(
-                    torch.arange(H), torch.arange(W)),
+                    torch.arange(H), torch.arange(W), indexing='ij'),
                 dim=-1).view(1, -1, 2) * down + (down - 1) / 2
                 A = den.view(1, -1, 1)
                 A_coord = A_coord.to(seq).float().view(1, -1, 2)
