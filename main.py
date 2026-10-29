@@ -99,8 +99,8 @@ def main_worker(config):
 
     if config.MODEL.RESUME:
         max_accuracy = load_checkpoint(config, [teacher, student], optimizer, lr_scheduler, logger)
-        # max_accuracy = (mae, mse, loss)
-        # logger.info(f"Accuracy of the network on the test images: {mae:.2f} | {mse:.2f}")
+        # max_accuracy = (mae, rmse, loss)
+        # logger.info(f"Accuracy of the network on the test images: {mae:.2f} | {rmse:.2f}")
         if config.EVAL_MODE:
             validate(config, data_loader_val, student, test_criterion, epoch=None)
             return
@@ -115,7 +115,7 @@ def main_worker(config):
 
     logger.info(f"Start training: [STAGE_1: {STAGE_1}] [STAGE_2: {STAGE_2}]")
     start_time = time.time()
-    epostack, maestack, msestack, lossstack = [], [], [], []
+    epostack, maestack, rmsestack, lossstack = [], [], [], []
     for epoch in range(config.TRAIN.START_EPOCH, config.TRAIN.EPOCHS):
         
         torch.cuda.reset_peak_memory_stats()
@@ -130,13 +130,13 @@ def main_worker(config):
         # if lr_scheduler is not None: lr_scheduler.step()
         
         if (epoch > 0 and epoch % config.SAVE_FREQ == 0) or epoch == config.TRAIN.EPOCHS - 1:
-            mae, mse, loss, report = validate(config, data_loader_val, student, test_criterion, epoch=epoch)
+            mae, rmse, loss, report = validate(config, data_loader_val, student, test_criterion, epoch=epoch)
             epostack.append(epoch)
             maestack.append(mae)
-            msestack.append(mse)
+            rmsestack.append(rmse)
             lossstack.append(loss)
             plot_curve('mae', epostack, maestack, os.path.join('exp', config.TAG, 'train.log', 'mae_curve.png'))
-            plot_curve('rmse', epostack, msestack, os.path.join('exp', config.TAG, 'train.log', 'rmse_curve.png'))
+            plot_curve('rmse', epostack, rmsestack, os.path.join('exp', config.TAG, 'train.log', 'rmse_curve.png'))
             plot_curve('loss', epostack, lossstack, os.path.join('exp', config.TAG, 'train.log', 'loss_curve.png'))
 
             append_history(Path(config.OUTPUT) / 'metrics_history.csv',
@@ -145,7 +145,7 @@ def main_worker(config):
             logger.info(f"Validation loss: {loss:.6f}")
 
             if mae < max_accuracy[0]:
-                max_accuracy = (mae, mse, loss)
+                max_accuracy = (mae, rmse, loss)
                 save_checkpoint(config, "best", [teacher, student], max_accuracy, logger,
                                 metrics=report, epoch_index=epoch)
                 (Path(config.OUTPUT) / 'best_metrics.json').write_text(

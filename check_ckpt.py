@@ -28,7 +28,7 @@ def run_check():
         print("-" * 75)
         print(f"训练记录的最佳指标 (max_accuracy):")
         print(f"  * Best MAE : {acc[0]:.4f}")
-        print(f"  * Best MSE : {acc[1]:.4f}")
+        print(f"  * Best RMSE : {acc[1]:.4f}")
         if len(acc) > 2:
             print(f"  * 产出 Epoch: {int(acc[2])}")
 

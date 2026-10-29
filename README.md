@@ -76,7 +76,7 @@ BATCH_SIZE=16 EPOCHS=50 bash train_ricew3999.sh ricew3999_ep50_bs16
 启动脚本拒绝复用非空 output 目录，以免现有训练器自动加载旧模型却不恢复优化器与轮数。
 模型、损失与学习率未改动：100% 标注、FP32、512×512 随机训练裁剪、整图验证 batch=1。
 验证发生在大于 0 且可被 VAL_EVERY 整除的 epoch 索引，以及最后一轮。
-现有训练器学习率保持固定；日志中的旧 MSE 名称实际为 RMSE；当前最佳模型统一按验证 MAE 最小选择。
+现有训练器学习率保持固定；变量、日志与新曲线名称统一使用 RMSE；当前最佳模型统一按验证 MAE 最小选择。
 
 
 ### RiceW3999 fully supervised training on AutoDL
