@@ -76,7 +76,7 @@ BATCH_SIZE=16 EPOCHS=50 bash train_ricew3999.sh ricew3999_ep50_bs16
 启动脚本拒绝复用非空 output 目录，以免现有训练器自动加载旧模型却不恢复优化器与轮数。
 模型、损失与学习率未改动：100% 标注、FP32、512×512 随机训练裁剪、整图验证 batch=1。
 验证发生在大于 0 且可被 VAL_EVERY 整除的 epoch 索引，以及最后一轮。
-现有训练器学习率保持固定；日志中的 MSE 实际为 RMSE，最佳模型按 4×MAE+RMSE 选择。
+现有训练器学习率保持固定；日志中的旧 MSE 名称实际为 RMSE；当前最佳模型统一按验证 MAE 最小选择。
 
 
 ### RiceW3999 fully supervised training on AutoDL
@@ -224,4 +224,16 @@ If you find this code useful for your research, please cite:
   pages={29363--29373},
   year={2025}
 }
+```
+
+## 统一计数、定位与效率指标
+
+新增 MAE、RMSE、Precision/Recall/F1@4/8/16px、逐图 CSV 与指标 JSON；
+训练自动导出，参数量、延迟/FPS、峰值显存和可选 GFLOPs 由独立脚本统计。
+详见 [评价说明](METRICS.md)。
+
+P2R 训练默认已启用4/8/16像素定位评价，可通过 `--opts TEST.LOC_RADII '[4.0,8.0,16.0]'` 设置。
+独立评估已有权重：
+```bash
+python main.py --eval --label 100 --data-path /path/to/RiceW3999 --resume /path/to/ckpt_epoch_best.pth --tag leaf_evaluation --opts DATA.DATASET ricew3999
 ```

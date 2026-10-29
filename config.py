@@ -77,6 +77,7 @@ _C.TRAIN.LR_SCHEDULER.DECAY_RATE = 0.900
 _C.TEST = CN()
 # Whether to use center crop when testing
 _C.TEST.CROP = True
+_C.TEST.LOC_RADII = [4.0, 8.0, 16.0]
 
 # -----------------------------------------------------------------------------
 # Misc

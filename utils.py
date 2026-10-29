@@ -29,12 +29,17 @@ def load_checkpoint(config, model, optimizer, lr_scheduler, logger):
     max_accuracy = [1e6] * 3
     return max_accuracy
 
-def save_checkpoint(config, epoch, model, max_accuracy, logger):
+def save_checkpoint(config, epoch, model, max_accuracy, logger, metrics=None, epoch_index=None):
     teacher, student = model
     save_state = {'teacher': teacher.state_dict(),
                   'student': student.state_dict(),
                   'max_accuracy': max_accuracy
                 }
+    if metrics is not None:
+        save_state['metrics'] = metrics
+    if epoch_index is not None:
+        save_state['epoch'] = epoch_index
+    save_state['selection_metric'] = 'mae'
     save_path = os.path.join(config.OUTPUT, f'ckpt_epoch_{epoch}.pth')
     logger.info(f"{save_path} saving......")
     torch.save(save_state, save_path)

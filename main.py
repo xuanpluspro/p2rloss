@@ -8,6 +8,9 @@ import time
 import random
 import argparse
 import datetime
+import json
+from pathlib import Path
+from counting_metrics import PointMetrics, append_history
 import torch
 import torch.nn.functional as tF
 from torch import optim
@@ -82,7 +85,7 @@ def main_worker(config):
 
     max_accuracy = [1e6] * 3
 
-    if config.TRAIN.AUTO_RESUME:
+    if config.TRAIN.AUTO_RESUME and not config.MODEL.RESUME:
         resume_file = auto_resume_helper(config.OUTPUT)
         if resume_file:
             if config.MODEL.RESUME:
@@ -96,11 +99,13 @@ def main_worker(config):
 
     if config.MODEL.RESUME:
         max_accuracy = load_checkpoint(config, [teacher, student], optimizer, lr_scheduler, logger)
-        # mae, mse, loss = validate(config, data_loader_val, student, test_criterion)
         # max_accuracy = (mae, mse, loss)
         # logger.info(f"Accuracy of the network on the test images: {mae:.2f} | {mse:.2f}")
         if config.EVAL_MODE:
+            validate(config, data_loader_val, student, test_criterion, epoch=None)
             return
+    elif config.EVAL_MODE:
+        raise ValueError('--eval requires --resume with a trained checkpoint')
 
     global STAGE_1, STAGE_2
     # STAGE_1 = max(25, int(5 / config.DATA.LABEL_PERCENT))
@@ -113,29 +118,39 @@ def main_worker(config):
     epostack, maestack, msestack, lossstack = [], [], [], []
     for epoch in range(config.TRAIN.START_EPOCH, config.TRAIN.EPOCHS):
         
+        torch.cuda.reset_peak_memory_stats()
+        train_start = time.perf_counter()
         train_one_epoch(config, [teacher, student], criterion, data_loader_train, optimizer, epoch)
+        train_seconds = time.perf_counter() - train_start
+        train_peak_mib = torch.cuda.max_memory_allocated() / 1024**2
 
         if epoch == STAGE_2 - 1:
             save_checkpoint(config, "stage2", [teacher, student], max_accuracy, logger)
 
         # if lr_scheduler is not None: lr_scheduler.step()
         
-        if epoch > 0 and (epoch % config.SAVE_FREQ == 0 or epoch == (config.TRAIN.EPOCHS - 1)):
-            mae, mse, loss = validate(config, data_loader_val, student, test_criterion)
+        if (epoch > 0 and epoch % config.SAVE_FREQ == 0) or epoch == config.TRAIN.EPOCHS - 1:
+            mae, mse, loss, report = validate(config, data_loader_val, student, test_criterion, epoch=epoch)
             epostack.append(epoch)
             maestack.append(mae)
             msestack.append(mse)
             lossstack.append(loss)
             plot_curve('mae', epostack, maestack, os.path.join('exp', config.TAG, 'train.log', 'mae_curve.png'))
-            plot_curve('mse', epostack, msestack, os.path.join('exp', config.TAG, 'train.log', 'mse_curve.png'))
+            plot_curve('rmse', epostack, msestack, os.path.join('exp', config.TAG, 'train.log', 'rmse_curve.png'))
             plot_curve('loss', epostack, lossstack, os.path.join('exp', config.TAG, 'train.log', 'loss_curve.png'))
 
-            logger.info(f"Accuracy of the network on the test images: {loss:.6f}")
+            append_history(Path(config.OUTPUT) / 'metrics_history.csv',
+                           dict(epoch=epoch + 1, train_seconds=train_seconds,
+                                train_peak_allocated_mib=train_peak_mib, **report))
+            logger.info(f"Validation loss: {loss:.6f}")
 
-            if mae * 4 + mse < max_accuracy[0] * 4 + max_accuracy[1]:
-                save_checkpoint(config, "best", [teacher, student], max_accuracy, logger)
+            if mae < max_accuracy[0]:
                 max_accuracy = (mae, mse, loss)
-            logger.info(f'Min total MAE|MSE|Loss: {max_accuracy[0]:.6f} | {max_accuracy[1]:.2f} | {max_accuracy[2] * 1e5:.2f}')
+                save_checkpoint(config, "best", [teacher, student], max_accuracy, logger,
+                                metrics=report, epoch_index=epoch)
+                (Path(config.OUTPUT) / 'best_metrics.json').write_text(
+                    (Path(config.OUTPUT) / 'evaluation' / f'epoch_{epoch + 1:04d}' / 'metrics.json').read_text())
+            logger.info(f'Best MAE checkpoint MAE|RMSE|Loss: {max_accuracy[0]:.6f} | {max_accuracy[1]:.2f} | {max_accuracy[2] * 1e5:.2f}')
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
@@ -223,50 +238,49 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch):
 
 
 @torch.no_grad()
-def validate(config, data_loader, model, criterion):
+def validate(config, data_loader, model, criterion, epoch=None):
     model.eval()
-
-    batch_time = AverageMeter()
+    meter = PointMetrics(config.TEST.LOC_RADII)
     loss_meter = AverageMeter()
-
-    mae_meter = AverageMeter()
-    mse_meter = AverageMeter()
-
-    end = time.time()
+    start = time.perf_counter()
+    # RiceW3999 uses right/bottom padding; recover original dimensions to
+    # avoid counting detections in artificial padded image regions.
+    original_sizes = {}
+    if hasattr(data_loader.dataset, 'samples'):
+        from PIL import Image
+        for image_id, image_path, _ in data_loader.dataset.samples:
+            with Image.open(image_path) as image:
+                original_sizes[str(image_id)] = (image.height, image.width)
     for idx, (images, dotseq, imgid) in enumerate(data_loader):
         images = images.cuda(non_blocking=True)
         dotseq = [d.cuda(non_blocking=True) for d in dotseq]
-        cnt = torch.tensor([d.size(0) for d in dotseq]).float().cuda()
-        bsize = images.size(0)
-        # compute output
-        with torch.no_grad():
-            output = model(images)
-            # outnum = output.sum(dim=(1,2,3)) / config.MODEL.FACTOR
-            loss = criterion(output, dotseq, images.size(-1) // output.size(-1)).item()
-            outnum = (output > 0).sum(dim=(1, 2, 3))
-        diff = torch.abs(outnum - cnt)
-        mae, mse = diff.mean(), (diff ** 2).mean()
-
-        loss_meter.update(loss, bsize)
-        mae_meter.update(mae.item(), bsize)
-        mse_meter.update(mse.item(), bsize)
-
-
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
-
+        output = model(images)
+        down_h, down_w = images.size(-2) / output.size(-2), images.size(-1) / output.size(-1)
+        loss = criterion(output, dotseq, images.size(-1) // output.size(-1)).item()
+        loss_meter.update(loss, images.size(0))
+        for b, seq in enumerate(dotseq):
+            positions = torch.nonzero(output[b, 0] > 0).float()
+            positions[:, 0] = positions[:, 0] * down_h + (down_h - 1) / 2
+            positions[:, 1] = positions[:, 1] * down_w + (down_w - 1) / 2
+            h, w = original_sizes.get(str(imgid[b]), images.shape[-2:])
+            keep = ((positions[:, 0] >= 0) & (positions[:, 0] < h) &
+                    (positions[:, 1] >= 0) & (positions[:, 1] < w))
+            meter.update(imgid[b], positions[keep].cpu().numpy(), seq[:, :2].cpu().numpy())
         if idx % config.PRINT_FREQ == 0:
-            memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
-            logger.info(
-                f'Test: [{idx}/{len(data_loader)}]  '
-                f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})  '
-                f'Loss {loss_meter.val:.6f} ({loss_meter.avg:.6f})  '
-                f'MAE {mae_meter.val:.3f} ({mae_meter.avg:.3f})  '
-                f'MSE {mse_meter.val ** 0.5:.3f} ({mse_meter.avg ** 0.5:.3f})  '
-                f'Mem {memory_used:.0f}MB')
-    logger.info(f' * MAE {mae_meter.avg:.3f} MSE {mse_meter.avg ** 0.5:.3f}')
-    return mae_meter.avg, mse_meter.avg ** 0.5, loss_meter.avg
+            logger.info(f'Validation [{idx}/{len(data_loader)}] loss={loss_meter.avg:.6f}')
+    report = meter.summary()
+    report['loss'] = float(loss_meter.avg)
+    report['params'] = sum(p.numel() for p in model.parameters())
+    report['evaluation_seconds'] = time.perf_counter() - start
+    label = 'standalone' if epoch is None else f'epoch_{epoch + 1:04d}'
+    meter.export(Path(config.OUTPUT) / 'evaluation' / label, report,
+                 {'epoch_index': epoch, 'split': 'val', 'weights': 'student',
+                  'prediction_threshold': 0.5, 'threshold_rule': 'logit > 0',
+                  'padding_predictions': 'removed for RiceW3999'})
+    logger.info('Validation | ' + ' | '.join(
+        f'{key} {value:.4f}' for key, value in report.items()
+        if key in ('mae', 'rmse') or key.startswith(('precision_', 'recall_', 'f1_'))))
+    return report['mae'], report['rmse'], report['loss'], report
 
 if __name__ == '__main__':
     # torch.cuda.set_per_process_memory_fraction(0.5, 0)
