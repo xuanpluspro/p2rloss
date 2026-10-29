@@ -59,9 +59,9 @@ You also need to prepare a protocol file that specifies which images are labeled
 
 ## GPUFree / AutoDL 本地数据与启动
 
-已提供 `data/RiceW3999/{JPEGImages,PointAnnotations,ImageSets}` 目录骨架。
-只需放入真实数据与已有的 train.txt / val.txt；实际数据仍由 Git 忽略。
-详见 [数据说明](data/README.md)。
+仓库仅提供 `data/` 目录。请将 RiceW3999 压缩包上传至该目录后解压，
+使数据位于 `data/RiceW3999/`，其中包含 JPEGImages、PointAnnotations 和 ImageSets。
+实际数据与压缩包均由 Git 忽略，不会上传。
 
 ```bash
 cd /root/gpufree-data/p2rloss
