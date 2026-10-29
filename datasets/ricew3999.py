@@ -17,7 +17,11 @@ class RiceW3999(Dataset):
         root = Path(root_path)
         split = 'train' if self.training else 'val'
         split_path = root / 'ImageSets' / (split + '.txt')
-        ids = split_path.read_text(encoding='utf-8-sig').split()
+        # Each line is one complete ID. Internal spaces and Chinese are
+        # valid filename characters and must not be split into tokens.
+        ids = [line.strip() for line in
+               split_path.read_text(encoding='utf-8-sig').splitlines()
+               if line.strip()]
         self.samples = []
         extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff')
         for image_id in ids:
