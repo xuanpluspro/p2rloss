@@ -57,6 +57,28 @@ You also need to prepare a protocol file that specifies which images are labeled
 
 ## Training
 
+## GPUFree / AutoDL 本地数据与启动
+
+已提供 `data/RiceW3999/{JPEGImages,PointAnnotations,ImageSets}` 目录骨架。
+只需放入真实数据与已有的 train.txt / val.txt；实际数据仍由 Git 忽略。
+详见 [数据说明](data/README.md)。
+
+```bash
+cd /root/gpufree-data/p2rloss
+git pull --ff-only origin main
+BATCH_SIZE=16 EPOCHS=50 bash train_ricew3999.sh ricew3999_ep50_bs16
+```
+
+脚本默认 batch=8、epochs=50、workers=8、验证间隔=5，均可通过环境变量覆盖：
+`BATCH_SIZE`、`EPOCHS`、`WORKERS`、`VAL_EVERY`。
+`DATA_PATH` 和 `WEIGHTS_PATH` 可指向仓库外的数据及本地权重。
+实验名称只决定输出目录，不会覆盖这些参数。请为新实验使用新名称；
+启动脚本拒绝复用非空 output 目录，以免现有训练器自动加载旧模型却不恢复优化器与轮数。
+模型、损失与学习率未改动：100% 标注、FP32、512×512 随机训练裁剪、整图验证 batch=1。
+验证发生在大于 0 且可被 VAL_EVERY 整除的 epoch 索引，以及最后一轮。
+现有训练器学习率保持固定；日志中的 MSE 实际为 RMSE，最佳模型按 4×MAE+RMSE 选择。
+
+
 ### RiceW3999 fully supervised training on AutoDL
 
 The RiceW3999 adapter uses **all train annotations** with `--label 100` and validates on `val.txt`; no `test.txt` or unlabeled protocol is required. Expected layout:

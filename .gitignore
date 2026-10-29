@@ -6,7 +6,15 @@ __pycache__/
 # experiments
 exp/
 # Local datasets
-/data/
+/data/**
+!/data/README.md
+!/data/RiceW3999/
+!/data/RiceW3999/JPEGImages/
+!/data/RiceW3999/JPEGImages/.gitkeep
+!/data/RiceW3999/PointAnnotations/
+!/data/RiceW3999/PointAnnotations/.gitkeep
+!/data/RiceW3999/ImageSets/
+!/data/RiceW3999/ImageSets/.gitkeep
 /SHTech_PartA/
 /sudanPart/
 
