@@ -44,7 +44,7 @@ python benchmark_model.py --checkpoint /path/to/best.pth --size 512 --device cud
 
 两个模型的构造器仍需要已有本地 VGG 预训练文件：
 PET 使用 pretrained/vgg16_bn-6c64b313.pth；
-P2R 使用根目录同名文件，可用 --pretrained /path/to/weights.pth 指定。
+P2R 同样使用 pretrained/vgg16_bn-6c64b313.pth，可用 --pretrained /path/to/weights.pth 指定。
 PET 检查点中的 args 用于恢复其架构；无 args 时使用当前 eval.py 默认架构，
 若自定义训练配置不同，需补齐检查点 args，严格载入不兼容会报错。
 PET 当前实现依赖 CUDA；不支持用该脚本在 CPU 上测 PET。

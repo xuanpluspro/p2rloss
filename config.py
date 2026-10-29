@@ -37,7 +37,7 @@ _C.DATA.NUM_WORKERS = 8
 _C.MODEL = CN()
 # Model type
 _C.MODEL.NAME = 'VGG16BN'
-_C.MODEL.PRETRAINED = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vgg16_bn-6c64b313.pth')
+_C.MODEL.PRETRAINED = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pretrained', 'vgg16_bn-6c64b313.pth')
 # Checkpoint to resume, could be overwritten by command line argument
 _C.MODEL.RESUME = ''
 _C.MODEL.FACTOR = 1

@@ -18,7 +18,7 @@ def main():
     parser.add_argument('--warmup', type=int, default=20)
     parser.add_argument('--iterations', type=int, default=100)
     parser.add_argument('--output', default='benchmark.json')
-    parser.add_argument('--pretrained', default='vgg16_bn-6c64b313.pth', help='P2R local backbone weights')
+    parser.add_argument('--pretrained', default=str(Path(__file__).resolve().parent / 'pretrained' / 'vgg16_bn-6c64b313.pth'), help='P2R local backbone weights')
     parser.add_argument('--image', help='Optional representative RGB image, resized to --size')
     parser.add_argument('--flops', action='store_true', help='Optional fvcore profiling after timing')
     args = parser.parse_args()

@@ -16,7 +16,7 @@ class VGG16_BN(nn.Module):
     def __init__(self, config):
         super().__init__()
         vgg = models.vgg16_bn(pretrained=False)
-        weight_path = Path(config.PRETRAINED) if config is not None else Path(__file__).resolve().parents[1] / 'vgg16_bn-6c64b313.pth'
+        weight_path = Path(config.PRETRAINED) if config is not None else Path(__file__).resolve().parents[1] / 'pretrained' / 'vgg16_bn-6c64b313.pth'
         if not weight_path.is_file():
             raise FileNotFoundError(f"VGG16-BN weights not found: {weight_path}. Set --opts MODEL.PRETRAINED /path/to/weights.pth")
         state_dict = torch.load(weight_path, map_location='cpu', weights_only=True)

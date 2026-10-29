@@ -30,3 +30,7 @@ __pycache__/
 
 .ipynb_checkpoints/
 /inference_result.jpg
+
+# Local backbone weights; keep directory documentation
+/pretrained/*
+!/pretrained/README.md

@@ -22,7 +22,7 @@ if [[ ! "$TAG" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
   exit 1
 fi
 DATA_PATH="${DATA_PATH:-$PWD/data/RiceW3999}"
-WEIGHTS_PATH="${WEIGHTS_PATH:-$PWD/vgg16_bn-6c64b313.pth}"
+WEIGHTS_PATH="${WEIGHTS_PATH:-$PWD/pretrained/vgg16_bn-6c64b313.pth}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 for split in train val; do
   if [[ ! -s "$DATA_PATH/ImageSets/$split.txt" ]]; then

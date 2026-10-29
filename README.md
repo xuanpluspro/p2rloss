@@ -93,7 +93,7 @@ The RiceW3999 adapter uses **all train annotations** with `--label 100` and vali
 
 Split files contain image IDs without extensions, one per line. Point TXT files contain pixel coordinates `x y`, one point per line (not YOLO-normalized coordinates). An empty TXT represents an image without points.
 
-Place the ImageNet VGG16-BN checkpoint `vgg16_bn-6c64b313.pth` in the repository root, then run:
+Place the ImageNet VGG16-BN checkpoint at `pretrained/vgg16_bn-6c64b313.pth`, then run:
 
 ```bash
 cd /root/autodl-tmp/p2rloss
@@ -237,3 +237,8 @@ P2R 训练默认已启用4/8/16像素定位评价，可通过 `--opts TEST.LOC_R
 ```bash
 python main.py --eval --label 100 --data-path /path/to/RiceW3999 --resume /path/to/ckpt_epoch_best.pth --tag leaf_evaluation --opts DATA.DATASET ricew3999
 ```
+
+## 预训练权重目录
+默认使用 `pretrained/vgg16_bn-6c64b313.pth`，与 PET 的 ImageNet VGG16-BN 骨干权重相同。
+若文件原先放在仓库根目录，更新代码后手动移入 pretrained；程序不会移动或删除已有文件。
+原来的 WEIGHTS_PATH 和 --opts MODEL.PRETRAINED 显式路径仍有效。
