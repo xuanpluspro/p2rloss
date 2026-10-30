@@ -11,6 +11,7 @@ import datetime
 import json
 from pathlib import Path
 from counting_metrics import PointMetrics, append_history
+from checkpointing import should_validate, resume_metric_history
 import torch
 import torch.nn.functional as tF
 from torch import optim
@@ -58,6 +59,8 @@ def get_args_parser():
     return args, config
 
 def main_worker(config):
+    if config.SAVE_FREQ < 1:
+        raise ValueError('SAVE_FREQ (validation interval) must be positive')
     data_loader_train, data_loader_val = build_loader(config.DATA, mode='train'), build_loader(config.DATA, mode='test')
 
     logger.info(f"Creating model with:{config.MODEL.NAME}")
@@ -98,6 +101,10 @@ def main_worker(config):
         else:
             logger.info(f'no checkpoint found in {config.OUTPUT}, ignoring auto resume')
 
+    if (not config.TRAIN.AUTO_RESUME and not config.MODEL.RESUME and
+            (Path(config.OUTPUT) / 'ckpt_epoch_latest.pth').exists()):
+        raise FileExistsError('Output has a checkpoint; enable TRAIN.AUTO_RESUME, use --resume or a new --tag')
+
     if config.MODEL.RESUME:
         max_accuracy = load_checkpoint(config, [teacher, student], optimizer, lr_scheduler, logger)
         # max_accuracy = (mae, rmse, loss)
@@ -108,6 +115,10 @@ def main_worker(config):
     elif config.EVAL_MODE:
         raise ValueError('--eval requires --resume with a trained checkpoint')
 
+    if config.TRAIN.START_EPOCH >= config.TRAIN.EPOCHS:
+        logger.info('Requested total epochs already completed; no training needed')
+        return
+
     global STAGE_1, STAGE_2
     # STAGE_1 = max(25, int(5 / config.DATA.LABEL_PERCENT))
     STAGE_1 = 25 # config.TRAIN.EPOCHS
@@ -116,7 +127,9 @@ def main_worker(config):
 
     logger.info(f"Start training: [STAGE_1: {STAGE_1}] [STAGE_2: {STAGE_2}]")
     start_time = time.time()
-    epostack, maestack, rmsestack, lossstack = [], [], [], []
+    best_epoch = config.TRAIN.BEST_EPOCH
+    epostack, maestack, rmsestack, lossstack = resume_metric_history(
+        Path(config.OUTPUT) / 'metrics_history.csv', config.TRAIN.START_EPOCH)
     for epoch in range(config.TRAIN.START_EPOCH, config.TRAIN.EPOCHS):
         
         torch.cuda.reset_peak_memory_stats()
@@ -125,14 +138,12 @@ def main_worker(config):
         train_seconds = time.perf_counter() - train_start
         train_peak_mib = torch.cuda.max_memory_allocated() / 1024**2
 
-        if epoch == STAGE_2 - 1:
-            save_checkpoint(config, "stage2", [teacher, student], max_accuracy, logger)
-
         # if lr_scheduler is not None: lr_scheduler.step()
         
-        if (epoch > 0 and epoch % config.SAVE_FREQ == 0) or epoch == config.TRAIN.EPOCHS - 1:
+        report = None
+        if should_validate(epoch, config.SAVE_FREQ, config.TRAIN.EPOCHS):
             mae, rmse, loss, report = validate(config, data_loader_val, student, test_criterion, epoch=epoch)
-            epostack.append(epoch)
+            epostack.append(epoch + 1)
             maestack.append(mae)
             rmsestack.append(rmse)
             lossstack.append(loss)
@@ -147,11 +158,23 @@ def main_worker(config):
 
             if mae < max_accuracy[0]:
                 max_accuracy = (mae, rmse, loss)
+                best_epoch = epoch
                 save_checkpoint(config, "best", [teacher, student], max_accuracy, logger,
-                                metrics=report, epoch_index=epoch)
+                                metrics=report, epoch_index=epoch, optimizer=optimizer,
+                                lr_scheduler=lr_scheduler, best_epoch=best_epoch)
                 (Path(config.OUTPUT) / 'best_metrics.json').write_text(
                     (Path(config.OUTPUT) / 'evaluation' / f'epoch_{epoch + 1:04d}' / 'metrics.json').read_text())
             logger.info(f'Best MAE checkpoint MAE|RMSE|Loss: {max_accuracy[0]:.6f} | {max_accuracy[1]:.2f} | {max_accuracy[2] * 1e5:.2f}')
+
+        # Save only after all work for this epoch has succeeded. Keep the
+        # previous complete epoch on OOM/interruption; never serialize partial updates.
+        if epoch == STAGE_2 - 1:
+            save_checkpoint(config, "stage2", [teacher, student], max_accuracy, logger,
+                            metrics=report, epoch_index=epoch, optimizer=optimizer,
+                            lr_scheduler=lr_scheduler, best_epoch=best_epoch)
+        save_checkpoint(config, "latest", [teacher, student], max_accuracy, logger,
+                        metrics=report, epoch_index=epoch, optimizer=optimizer,
+                        lr_scheduler=lr_scheduler, best_epoch=best_epoch)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))

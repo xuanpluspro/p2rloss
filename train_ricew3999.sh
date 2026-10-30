@@ -40,10 +40,8 @@ if [[ ! -f "$WEIGHTS_PATH" ]]; then
   echo "Missing VGG16-BN weights: $WEIGHTS_PATH (override with WEIGHTS_PATH=/path/to/weights.pth)" >&2
   exit 1
 fi
-if [[ -d "exp/$TAG/output" ]] && [[ -n "$(find "exp/$TAG/output" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
-  echo "Experiment exp/$TAG/output is not empty. Use a new TAG; this trainer does not support full-state resume." >&2
-  exit 1
-fi
+# Full-state auto-resume is enabled by default. Reuse the same TAG to continue;
+# choose a new TAG for an independent experiment.
 mkdir -p "exp/$TAG/train.log"
 echo "Data=$DATA_PATH | batch=$BATCH_SIZE | epochs=$EPOCHS | workers=$WORKERS | validation interval=$VAL_EVERY | labels=100%"
 "$PYTHON_BIN" -u main.py \
@@ -52,4 +50,4 @@ echo "Data=$DATA_PATH | batch=$BATCH_SIZE | epochs=$EPOCHS | workers=$WORKERS | 
   --opts DATA.DATASET ricew3999 TRAIN.EPOCHS "$EPOCHS" \
   DATA.NUM_WORKERS "$WORKERS" SAVE_FREQ "$VAL_EVERY" \
   MODEL.PRETRAINED "$WEIGHTS_PATH" \
-  2>&1 | tee "exp/$TAG/train.log/running.log"
+  2>&1 | tee -a "exp/$TAG/train.log/running.log"

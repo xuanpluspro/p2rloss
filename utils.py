@@ -14,36 +14,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import random
 
-def load_checkpoint(config, model, optimizer, lr_scheduler, logger):
-    logger.info(f"==============> Resuming form {config.MODEL.RESUME}....................")
-    if config.MODEL.RESUME.startswith('https'):
-        checkpoint = torch.hub.load_state_dict_from_url(
-            config.MODEL.RESUME, map_location='cpu', check_hash=True)
-    else:
-        checkpoint = torch.load(config.MODEL.RESUME, map_location='cpu')
-    teacher, student = model
-    msg_t = teacher.load_state_dict(checkpoint['teacher'], strict=False)
-    logger.info(f"[load teacher]: {msg_t}")
-    msg_s = student.load_state_dict(checkpoint['student'], strict=False)
-    logger.info(f"[load student]: {msg_s}")
-    max_accuracy = [1e6] * 3
-    return max_accuracy
+from checkpointing import (load_training_state, save_training_state, find_latest)
 
-def save_checkpoint(config, epoch, model, max_accuracy, logger, metrics=None, epoch_index=None):
-    teacher, student = model
-    save_state = {'teacher': teacher.state_dict(),
-                  'student': student.state_dict(),
-                  'max_accuracy': max_accuracy
-                }
-    if metrics is not None:
-        save_state['metrics'] = metrics
-    if epoch_index is not None:
-        save_state['epoch'] = epoch_index
-    save_state['selection_metric'] = 'mae'
-    save_path = os.path.join(config.OUTPUT, f'ckpt_epoch_{epoch}.pth')
-    logger.info(f"{save_path} saving......")
-    torch.save(save_state, save_path)
-    logger.info(f"{save_path} saved !!!")
+
+def load_checkpoint(config, model, optimizer, lr_scheduler, logger):
+    return load_training_state(config, model, optimizer, lr_scheduler, logger)
+
+
+def save_checkpoint(config, epoch, model, max_accuracy, logger, metrics=None,
+                    epoch_index=None, optimizer=None, lr_scheduler=None, best_epoch=-1):
+    return save_training_state(config, epoch, model, max_accuracy, logger,
+                               optimizer=optimizer, lr_scheduler=lr_scheduler,
+                               epoch_index=epoch_index, metrics=metrics, best_epoch=best_epoch)
 
 
 def get_grad_norm(parameters, norm_type=2):
@@ -60,16 +42,7 @@ def get_grad_norm(parameters, norm_type=2):
 
 
 def auto_resume_helper(output_dir):
-    checkpoints = os.listdir(output_dir)
-    checkpoints = [ckpt for ckpt in checkpoints if ckpt.endswith('pth')]
-    print(f"All checkpoints founded in {output_dir}: {checkpoints}")
-    if len(checkpoints) > 0:
-        latest_checkpoint = max([os.path.join(output_dir, d) for d in checkpoints], key=os.path.getmtime)
-        print(f"The latest checkpoint founded: {latest_checkpoint}")
-        resume_file = latest_checkpoint
-    else:
-        resume_file = None
-    return resume_file
+    return find_latest(output_dir)
 
 
 def reduce_tensor(tensor):

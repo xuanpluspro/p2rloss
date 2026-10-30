@@ -73,9 +73,9 @@ BATCH_SIZE=16 EPOCHS=50 bash train_ricew3999.sh ricew3999_ep50_bs16
 `BATCH_SIZE`、`EPOCHS`、`WORKERS`、`VAL_EVERY`。
 `DATA_PATH` 和 `WEIGHTS_PATH` 可指向仓库外的数据及本地权重。
 实验名称只决定输出目录，不会覆盖这些参数。请为新实验使用新名称；
-启动脚本拒绝复用非空 output 目录，以免现有训练器自动加载旧模型却不恢复优化器与轮数。
+同一实验名称默认自动恢复完整训练状态；独立实验请使用新名称。旧版只有权重的文件无法恢复训练，仍可用于评估。
 模型、损失与学习率未改动：100% 标注、FP32、512×512 随机训练裁剪、整图验证 batch=1。
-验证发生在大于 0 且可被 VAL_EVERY 整除的 epoch 索引，以及最后一轮。
+验证发生在每 VAL_EVERY 个已完成 epoch（默认第 5、10、15……轮）以及最后一轮；最新检查点每轮保存。
 现有训练器学习率保持固定；变量、日志与新曲线名称统一使用 RMSE；当前最佳模型统一按验证 MAE 最小选择。
 
 
@@ -108,7 +108,7 @@ WEIGHTS_PATH=/absolute/path/vgg16_bn-6c64b313.pth bash train_ricew3999.sh ricew3
 
 The script trains for 50 epochs, batch size 8, using the P2R supervised loss. Training uses **one online random 512×512 output patch per source image per visit**, with scale augmentation (0.7–1.3) and random horizontal flip; points are cropped/scaled/flipped together. This is not exhaustive non-overlapping tiling. Validation uses full images, batch size 1. Wheat 1024×1024 and rice 512×512 images can share a training batch because every training output is 512×512. The teacher/pseudo-label branch is skipped at 100% labels, although the current trainer still creates and EMA-updates a teacher model.
 
-Logs: `exp/<tag>/train.log/running.log`; best checkpoint: `exp/<tag>/output/ckpt_epoch_best.pth`. Validation runs every 5 epoch indices after index 0 and at the last epoch. Use a new tag for a fresh run: the existing automatic checkpoint reload restores model weights, not full optimizer/epoch state.
+Logs: `exp/<tag>/train.log/running.log` (appended on restart); best checkpoint: `exp/<tag>/output/ckpt_epoch_best.pth`; latest full training state: `exp/<tag>/output/ckpt_epoch_latest.pth`. Validation runs at completed epochs 5, 10, 15, etc., and at the final epoch. Reuse the same tag and original settings to resume automatically; use a new tag for a fresh run. See [resume documentation](RESUME.md).
 
 GPU peak memory depends on batch size, precision, image size and point count. The trainer currently uses FP32. It logs PyTorch peak allocated memory as `mem ... MB`; no measured GPU-memory comparison with PET is provided here.
 
@@ -165,7 +165,7 @@ The training configuration is managed through `config.py`. Key parameters includ
 - `DATA.DATASET`: Dataset name (default: 'shha')
 - `MODEL.NAME`: Model architecture (default: 'VGG16BN')
 - `MODEL.LOSS`: Loss function (default: 'P2R')
-- `TRAIN.EPOCHS`: Total training epochs (default: 1500)
+- `TRAIN.EPOCHS`: Total training epochs (default: 400)
 - `TRAIN.BASE_LR`: Base learning rate (default: 5e-5)
 - `TRAIN.LR_SCHEDULER`: Learning rate scheduler settings
 
@@ -202,11 +202,11 @@ The model uses VGG16BN as the backbone with:
 
 ## Training Strategy
 
-1. **Stage 1 (Epochs 0-25)**: Supervised training with labeled data only
-2. **Stage 2 (Epochs 25-50)**: Semi-supervised training with both labeled and unlabeled data
-   - Teacher model generates pseudo-labels for unlabeled data
-   - Student model learns from both labeled and pseudo-labeled data
-   - Progressive weight adjustment for semi-supervised loss
+The current code uses supervised loss during epoch indices 0–49. For labeled fractions
+below 100%, the teacher pseudo-label branch starts at index 50 (the 51st epoch);
+its weight is initially zero and increases from index 51. At 100% labels this branch
+is skipped. A 50-epoch run therefore does not train on unlabeled data. This schedule
+is preserved by the resume changes; training resumes with the original epoch index.
 
 ## Results
 
@@ -254,3 +254,9 @@ PRINT_FREQ 控制详细文件日志频率，不再控制终端进度条刷新；
 VGG16-BN 初始化改用 weights=None，再加载指定的本地预训练权重；
 meshgrid 显式指定 indexing='ij'，保留原有(y,x)坐标顺序。
 此次修改不改变网络、损失、学习率或数据增强。现有训练进程需重启后才使用新版界面。
+
+
+## 完整断点续训
+默认 `TRAIN.AUTO_RESUME=True`。每轮保存最新的教师/学生、优化器、调度器、轮数、最佳指标和随机状态。
+检查点采用原子替换，当前轮失败时可从上一个完整 epoch 恢复。
+启动脚本复用同一 TAG 即自动恢复，保持原 EPOCHS（总轮数）和训练配置；详见 [RESUME.md](RESUME.md)。

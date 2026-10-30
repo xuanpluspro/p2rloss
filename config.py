@@ -47,6 +47,7 @@ _C.MODEL.LOSS = 'P2R'
 # -----------------------------------------------------------------------------
 _C.TRAIN = CN()
 _C.TRAIN.START_EPOCH = 0
+_C.TRAIN.BEST_EPOCH = -1
 _C.TRAIN.EPOCHS = 400
 _C.TRAIN.BASE_LR = 5e-5
 _C.TRAIN.BACKBONE_LR = 1e-5
@@ -86,7 +87,7 @@ _C.TEST.LOC_RADII = [4.0, 8.0, 16.0]
 _C.OUTPUT = ''
 # Tag of experiment, overwritten by command line argument
 _C.TAG = 'default'
-# Frequency to save checkpoint
+# Validation interval in completed epochs (latest checkpoint is saved every epoch)
 _C.SAVE_FREQ = 5
 # Frequency to logging info
 _C.PRINT_FREQ = 100
