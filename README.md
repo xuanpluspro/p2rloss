@@ -260,3 +260,23 @@ meshgrid 显式指定 indexing='ij'，保留原有(y,x)坐标顺序。
 默认 `TRAIN.AUTO_RESUME=True`。每轮保存最新的教师/学生、优化器、调度器、轮数、最佳指标和随机状态。
 检查点采用原子替换，当前轮失败时可从上一个完整 epoch 恢复。
 启动脚本复用同一 TAG 即自动恢复，保持原 EPOCHS（总轮数）和训练配置；详见 [RESUME.md](RESUME.md)。
+
+
+## 快速数据检查（RiceW3999 / VOC 点标注）
+
+```bash
+python check_data.py --data-path data/RiceW3999                 # 默认快速检查
+python check_data.py --data-path data/RiceW3999 --decode        # 完整解码，检查像素损坏
+python check_data.py --data-path data/RiceW3999 --check-overlap # 完整解码并按像素查重
+```
+
+快速模式只读取图片头中的尺寸及全部标注，检查配对、完整中文/空格 ID、重复 ID、坐标有限性/边界和 train/val/test ID 重叠。
+不读取全部像素，因此不能保证发现图像数据区损坏；完整检查需加 `--decode`。
+`--check-overlap` 比较解码后 RGB 像素，不能排除来自同一原图的不同重叠裁块泄漏。
+JSON 仍包含图片数、点数、空标注数和尺寸统计，进度写入 stderr，`--no-progress` 可关闭。
+检查仅依赖 Pillow 和 Python 标准库，不导入训练模型/PyTorch；有 tqdm 时显示进度条，没有时输出计数进度。
+脚本只读，不去重、不删改数据，也不会自动加入每轮训练。只适用于 JPEGImages/PointAnnotations/ImageSets 点标注目录，不替代原始 SHHA 等格式的预处理。
+本次每仓库 9 项针对性数据检查测试通过；未重跑模型训练测试。
+
+PET/P2RLoss 的检查保留重复点的计数，不会擅自删除或修改标注；这不代表重复标注必然正确。
+
