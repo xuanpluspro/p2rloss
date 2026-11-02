@@ -88,7 +88,7 @@ _C.OUTPUT = ''
 # Tag of experiment, overwritten by command line argument
 _C.TAG = 'default'
 # Validation interval in completed epochs (latest checkpoint is saved every epoch)
-_C.SAVE_FREQ = 5
+_C.SAVE_FREQ = 1
 # Frequency to logging info
 _C.PRINT_FREQ = 100
 # Fixed random seed

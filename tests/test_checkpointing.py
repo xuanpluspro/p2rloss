@@ -151,6 +151,7 @@ class CheckpointTest(unittest.TestCase):
             self.assertNotIn('mse', rows[0])
 
     def test_validation_rounds_include_last_without_duplicate(self):
+        self.assertEqual([e + 1 for e in range(50) if should_validate(e, 1, 50)], list(range(1,51)))
         self.assertEqual([e + 1 for e in range(50) if should_validate(e, 5, 50)],
                          list(range(5, 51, 5)))
         self.assertEqual([e + 1 for e in range(12) if should_validate(e, 5, 12)], [5, 10, 12])

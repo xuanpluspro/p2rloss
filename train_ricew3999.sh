@@ -4,7 +4,7 @@ cd "$(dirname "$0")"
 BATCH_SIZE="${BATCH_SIZE:-8}"
 EPOCHS="${EPOCHS:-50}"
 WORKERS="${WORKERS:-8}"
-VAL_EVERY="${VAL_EVERY:-5}"
+VAL_EVERY="${VAL_EVERY:-1}"
 for key in BATCH_SIZE EPOCHS WORKERS VAL_EVERY; do
   value="${!key}"
   if [[ ! "$value" =~ ^[0-9]+$ ]]; then

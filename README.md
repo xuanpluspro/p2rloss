@@ -69,13 +69,13 @@ git pull --ff-only origin main
 BATCH_SIZE=16 EPOCHS=50 bash train_ricew3999.sh ricew3999_ep50_bs16
 ```
 
-脚本默认 batch=8、epochs=50、workers=8、验证间隔=5，均可通过环境变量覆盖：
+脚本默认 batch=8、epochs=50、workers=8、验证间隔=1，均可通过环境变量覆盖：
 `BATCH_SIZE`、`EPOCHS`、`WORKERS`、`VAL_EVERY`。
 `DATA_PATH` 和 `WEIGHTS_PATH` 可指向仓库外的数据及本地权重。
 实验名称只决定输出目录，不会覆盖这些参数。请为新实验使用新名称；
 同一实验名称默认自动恢复完整训练状态；独立实验请使用新名称。旧版只有权重的文件无法恢复训练，仍可用于评估。
 模型、损失与学习率未改动：100% 标注、FP32、512×512 随机训练裁剪、整图验证 batch=1。
-验证发生在每 VAL_EVERY 个已完成 epoch（默认第 5、10、15……轮）以及最后一轮；最新检查点每轮保存。
+验证发生在每 VAL_EVERY 个已完成 epoch（默认每轮）以及最后一轮；最新检查点每轮保存。
 现有训练器学习率保持固定；变量、日志与新曲线名称统一使用 RMSE；当前最佳模型统一按验证 MAE 最小选择。
 
 
