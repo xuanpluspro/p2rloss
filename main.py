@@ -179,6 +179,9 @@ def main_worker(config):
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     logger.info('Training time {}'.format(total_time_str))
+    from point_efficiency import export_efficiency
+    export_efficiency(student, config.OUTPUT)
+
 
 
 def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch):
@@ -322,6 +325,8 @@ def validate(config, data_loader, model, criterion, epoch=None):
         f'{key} {value:.4f}' for key, value in report.items()
         if key in ('mae', 'rmse') or key.startswith(('precision_', 'recall_', 'f1_'))))
     return report['mae'], report['rmse'], report['loss'], report
+
+
 
 if __name__ == '__main__':
     # torch.cuda.set_per_process_memory_fraction(0.5, 0)
